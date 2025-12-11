@@ -40,10 +40,3 @@ CREATE TABLE products_raw (
     product_name TEXT,
     category TEXT
 );
-
--- Queries para verificar se as tabelas foram criadas corretamente
-SELECT * FROM customers_raw;
-SELECT * FROM order_items_raw;
-SELECT * FROM orders_raw;
-SELECT * FROM payments_raw;
-SELECT * FROM products_raw;
