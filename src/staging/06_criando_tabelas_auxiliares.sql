@@ -15,10 +15,21 @@
         - created_at: Timestamp de quando o registro foi criado.
 
     - AUDIT_LOG: Tabela para registrar logs de auditoria das operações de ETL, incluindo
-      timestamps, status e detalhes das execuções.
+      timestamps, status e detalhes das execuções. As colunas da tabela AUDIT_LOG são:
+        - audit_id: Identificador único do log de auditoria (PK).
+        - tabela afetada: conjunto das colunas da tabela específica (customers, orders, etc).
+        - issue_code: Código do problema referenciado da tabela ISSUE_REFERENCE (FK).
+        - issue_description: Descrição detalhada do problema.
+        - detected_at: Timestamp de quando o problema foi detectado.
+        - resolution: Descrição da ação tomada para resolver o problema.
+        - resolved_at: Timestamp de quando o problema foi resolvido.
+        - detected_by: Identificação do processo ou usuário que detectou o problema.
 
     - ORPHAN: Tabela para armazenar registros órfãos que não possuem correspondência
-      nas tabelas principais, facilitando a análise e correção posterior.
+      nas tabelas principais, facilitando a análise e correção posterior. As colunas da
+        tabela ORPHAN são:
+            - conjunto das colunas da tabela específica (customers, orders, etc).
+            - detected_at: Timestamp de quando o registro órfão foi detectado.
 
     ======================================================================================== */
 
