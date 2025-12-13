@@ -13,23 +13,41 @@
         - severity: Nível de severidade do problema (low, medium, high, critical).
         - default_action: Ação padrão recomendada para resolver o problema.
         - created_at: Timestamp de quando o registro foi criado.
+      A tabela ISSUE_REFERENCE será a única das 3 que será preenchida nessa etapa.
+      Seus dados serão consolidados a partir da planilha issues_found.xlsx.
+      Nem todas as issues são registradas nessa tabela, apenas as que demandam
+      algum tratamento além da limpeza leve.
 
-    - AUDIT_LOG: Tabela para registrar logs de auditoria das operações de ETL, incluindo
-      timestamps, status e detalhes das execuções. As colunas da tabela AUDIT_LOG são:
-        - audit_id: Identificador único do log de auditoria (PK).
-        - tabela afetada: conjunto das colunas da tabela específica (customers, orders, etc).
-        - issue_code: Código do problema referenciado da tabela ISSUE_REFERENCE (FK).
-        - issue_description: Descrição detalhada do problema.
+    - ISSUE_LOG: Tabela para registrar logs de auditoria das operações de ETL, incluindo
+      timestamps, status e detalhes das execuções. As colunas da tabela ISSUE_LOG são:
+        - issue_log_id: Identificador único do log (PK).
+        - issue_id: Código do problema referenciado da tabela ISSUE_REFERENCE.
+        - table_name: Nome da tabela onde o problema foi detectado.
+        - column_name: Nome da coluna onde o problema foi detectado.
+        - record_id: Identificador do registro afetado.
+        - detected_value: Valor detectado que causou o problema.
+        - detection_rule: Regra ou método utilizado para detectar o problema.
+        - severity: Nível de severidade do problema.
+        - status: Status atual do problema (OPEN, RESOLVED, PENDING).
         - detected_at: Timestamp de quando o problema foi detectado.
-        - resolution: Descrição da ação tomada para resolver o problema.
+        - pipeline_stage: Etapa do pipeline onde o problema foi detectado.
+        - analyst_note: Notas adicionais do analista sobre o problema.
         - resolved_at: Timestamp de quando o problema foi resolvido.
-        - detected_by: Identificação do processo ou usuário que detectou o problema.
 
     - ORPHAN: Tabela para armazenar registros órfãos que não possuem correspondência
       nas tabelas principais, facilitando a análise e correção posterior. As colunas da
         tabela ORPHAN são:
-            - conjunto das colunas da tabela específica (customers, orders, etc).
+            - orphan_id: Identificador único do registro órfão (PK).
+            - parent_table: Nome da tabela pai onde o registro deveria existir.
+            - parent_column: Nome da coluna pai onde o registro deveria existir.
+            - child_table: Nome da tabela filho onde o registro órfão foi encontrado.
+            - child_column: Nome da coluna filho onde o registro órfão foi encontrado.
+            - child_record_id: Identificador do registro órfão.
+            - missing_parent_id: Identificador do registro pai que está faltando.
             - detected_at: Timestamp de quando o registro órfão foi detectado.
+            - pipeline_stage: Etapa do pipeline onde o registro órfão foi detectado.
+            - status: Status atual do registro órfão (OPEN, RESOLVED).
+            - analyst_note: Notas adicionais do analista sobre o registro órfão.
 
     ======================================================================================== */
 
@@ -43,116 +61,47 @@ CREATE TABLE issue_reference (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Criação da tabela AUDIT_LOG - Customers
-CREATE TABLE audit_log_customers (
-    audit_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    customer_id TEXT,
-    customer_name TEXT,
-    customer_city TEXT,
-    issue_code TEXT REFERENCES issue_reference(issue_code),
-    issue_description TEXT,
-    detected_at TIMESTAMP DEFAULT NOW(),
-    resolution TEXT,
-    resolved_at TIMESTAMP,
-    detected_by TEXT
+-- Populando a tabela ISSUE_REFERENCE com os problemas identificados no data profiling
+INSERT INTO issue_reference (issue_code, issue_type, issue_description, severity, default_action)
+VALUES
+    ('I001', 'NULL_ANALYTICAL_FIELD', 'Campo analítico nulo', 'MEDIUM', 'Verificar origem dos dados e corrigir'),
+    ('I002', 'DUPLICATE_PRIMARY_KEY', 'Chave primária duplicada', 'HIGH', 'Remover duplicatas ou consolidar registros'),
+    ('I006', 'INVALID_PRICE_VALUE', 'Valor de preço inválido: null, zero, negativo', 'CRITICAL', 'Validar e corrigir valores de preço'),
+    ('I007', 'OUTLIER_VALUE', 'Valor estatisticamente muito acima do esperado', 'MEDIUM', 'Aplicar regra de negócio para validação'),
+    ('I009', 'INVALID_DATE_VALUE', 'Valor de data inválido: null, passado/futuro absurdo', 'MEDIUM', 'Converter para NULL'),
+    ('I010', 'INCONSISTENT_DATE_SEQUENCE', 'Sequência de datas de compra e entrega inconsistente', 'HIGH', 'Converter inconsistência para NULL e manter a data base'),
+    ('I011', 'ORPHAN_FOREIGN_KEY', 'Chave estrangeira que não possui correspondência na tabela referenciada', 'HIGH', 'Remover órfão e registrar na tabela ORPHAN'),
+    ('I014', 'INVALID_PAYMENT_VALUE', 'Valor de pagamento inválido: null, zero, negativo', 'CRITICAL', 'Validar e corrigir valores de pagamento'),
+    ('I016', 'NULL_MANDATORY_FIELD', 'Campo obrigatório nulo', 'MEDIUM', 'Aplicar regra de negócio para preenchimento ou remoção');
+
+-- Criação da tabela ISSUE_LOG
+CREATE TABLE IF NOT EXISTS issue_log (
+    issue_log_id BIGSERIAL PRIMARY KEY,
+    issue_id VARCHAR(10) NOT NULL,
+    table_name VARCHAR(50) NOT NULL,
+    column_name VARCHAR(50) NOT NULL,
+    record_id VARCHAR(100) NOT NULL,
+    detected_value TEXT,
+    detection_rule TEXT NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    detected_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    pipeline_stage VARCHAR(50) NOT NULL,
+    analyst_note TEXT,
+    resolved_at TIMESTAMP
 );
 
--- Criação da tabela AUDIT_LOG - Order Items
-CREATE TABLE audit_log_order_items (
-    audit_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id TEXT,
-    product_id TEXT,
-    price TEXT,
-    freight_value TEXT,
-    issue_code TEXT REFERENCES issue_reference(issue_code),
-    issue_description TEXT,
-    detected_at TIMESTAMP DEFAULT NOW(),
-    resolution TEXT,
-    resolved_at TIMESTAMP,
-    detected_by TEXT
-);
-
--- Criação da tabela AUDIT_LOG - Orders
-CREATE TABLE audit_log_orders (
-    audit_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id TEXT,
-    customer_id TEXT,
-    purchased_at TEXT,
-    delivered_at TEXT,
-    issue_code TEXT REFERENCES issue_reference(issue_code),
-    issue_description TEXT,
-    detected_at TIMESTAMP DEFAULT NOW(),
-    resolution TEXT,
-    resolved_at TIMESTAMP,
-    detected_by TEXT
-);
-
--- Criação da tabela AUDIT_LOG - Payments
-CREATE TABLE audit_log_payments (
-    audit_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id TEXT,
-    payment_type TEXT,
-    payment_value TEXT,
-    issue_code TEXT REFERENCES issue_reference(issue_code),
-    issue_description TEXT,
-    detected_at TIMESTAMP DEFAULT NOW(),
-    resolution TEXT,
-    resolved_at TIMESTAMP,
-    detected_by TEXT
-);
-
--- Criação da tabela AUDIT_LOG - Products
-CREATE TABLE audit_log_products (
-    audit_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    product_id TEXT,
-    product_name TEXT,
-    category TEXT,
-    issue_code TEXT REFERENCES issue_reference(issue_code),
-    issue_description TEXT,
-    detected_at TIMESTAMP DEFAULT NOW(),
-    resolution TEXT,
-    resolved_at TIMESTAMP,
-    detected_by TEXT
-);
-
--- Criação da tabela ORPHAN - Customers
-CREATE TABLE orphan_customers (
-    customer_id TEXT PRIMARY KEY,
-    customer_name TEXT,
-    customer_city TEXT,
-    detected_at TIMESTAMP DEFAULT NOW()
-);
-
--- Criação da tabela ORPHAN - Order Items
-CREATE TABLE orphan_order_items (
-    order_id TEXT,
-    product_id TEXT,
-    price TEXT,
-    freight_value TEXT,
-    detected_at TIMESTAMP DEFAULT NOW()
-);
-
--- Criação da tabela ORPHAN - Orders
-CREATE TABLE orphan_orders (
-    order_id TEXT,
-    customer_id TEXT,
-    purchased_at TEXT,
-    delivered_at TEXT,
-    detected_at TIMESTAMP DEFAULT NOW()
-);
-
--- Criação da tabela ORPHAN - Payments
-CREATE TABLE orphan_payments (
-    order_id TEXT,
-    payment_type TEXT,
-    payment_value TEXT,
-    detected_at TIMESTAMP DEFAULT NOW()
-);
-
--- Criação da tabela ORPHAN - Products
-CREATE TABLE orphan_products (
-    product_id TEXT,
-    product_name TEXT,
-    category TEXT,
-    detected_at TIMESTAMP DEFAULT NOW()
+-- Criação da tabela ORPHAN
+CREATE TABLE IF NOT EXISTS orphan_records (
+    orphan_id BIGSERIAL PRIMARY KEY,
+    parent_table VARCHAR(50) NOT NULL,
+    parent_column VARCHAR(50) NOT NULL,
+    child_table VARCHAR(50) NOT NULL,
+    child_column VARCHAR(50) NOT NULL,
+    child_record_id VARCHAR(100) NOT NULL,
+    missing_parent_id VARCHAR(100) NOT NULL,
+    detected_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    pipeline_stage VARCHAR(50) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    analyst_note TEXT
 );
