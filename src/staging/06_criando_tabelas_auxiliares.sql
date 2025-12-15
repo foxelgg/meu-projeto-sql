@@ -74,6 +74,11 @@ VALUES
     ('I014', 'INVALID_PAYMENT_VALUE', 'Valor de pagamento inválido: null, zero, negativo', 'CRITICAL', 'Validar e corrigir valores de pagamento'),
     ('I016', 'NULL_MANDATORY_FIELD', 'Campo obrigatório nulo', 'MEDIUM', 'Aplicar regra de negócio para preenchimento ou remoção');
 
+-- Adicionando nova issue para pedido que virou órfão em cascata na tabela order_items_staging
+INSERT INTO issue_reference (issue_code, issue_type, issue_description, severity, default_action)
+VALUES
+    ('I017', 'ORDER_WITHOUT_ITEMS', 'Pedido sem itens associados', 'MEDIUM', 'Aplicar regra de negócio para tratamento');
+
 -- Criação da tabela ISSUE_LOG
 CREATE TABLE IF NOT EXISTS issue_log (
     issue_log_id BIGSERIAL PRIMARY KEY,
