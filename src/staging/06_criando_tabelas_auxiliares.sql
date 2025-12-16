@@ -79,6 +79,17 @@ INSERT INTO issue_reference (issue_code, issue_type, issue_description, severity
 VALUES
     ('I017', 'ORDER_WITHOUT_ITEMS', 'Pedido sem itens associados', 'MEDIUM', 'Aplicar regra de negócio para tratamento');
 
+INSERT INTO issue_reference (issue_code, issue_type, issue_description, severity, default_action)
+VALUES 
+    ('I018', 'OUTLIER_FREIGHT_VALUE', 'Valor de frete estatisticamente muito acima do esperado', 'MEDIUM', 'Aplicar regra de negócio para validação'),
+    ('I019', 'OUTLIER_PAYMENT_VALUE', 'Valor de pagamento estatisticamente muito acima do esperado', 'MEDIUM', 'Aplicar regra de negócio para validação');
+
+UPDATE issue_reference
+SET issue_type = 'OUTLIER_PRICE_VALUE',
+    issue_description = 'Valor de preço estatisticamente muito acima do esperado'
+WHERE issue_code = 'I007';
+
+
 -- Criação da tabela ISSUE_LOG
 CREATE TABLE IF NOT EXISTS issue_log (
     issue_log_id BIGSERIAL PRIMARY KEY,
