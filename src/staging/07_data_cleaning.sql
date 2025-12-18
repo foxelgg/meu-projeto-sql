@@ -729,8 +729,122 @@ WHERE parent_table = 'orders_staging'
     FROM issue_log
     WHERE table_name = 'payments_staging'
       AND issue_id = 'I011'
-      AND status = 'RESOLVED'
+      AND status = 'RESOLVED' -- erro de lógica nesse NOT IN
   );
 
 -- A tabela products_staging não possui tratamentos semiautomáticos definidos além do já realizado no início deste script.
+
+-- CORREÇÕES DE PROBLEMAS QUE FORAM ESQUECIDOS DURANTE A FASE STAGING
+
+-- Remover order_id da tabela orders_staging que se refere a um pedido sem itens após exclusão de órfãos da base
+DELETE FROM orders_staging o
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM order_items_staging oi
+  WHERE o.order_id = oi.order_id
+  );
+
+-- Atualizando a issue_log para marcar o caso como 'RESOLVED'
+UPDATE issue_log il
+SET status = 'RESOLVED',
+    resolved_at = NOW(),
+    analyst_note = CONCAT(analyst_note, ' - Registro de pedido sem itens removido da tabela orders')
+WHERE il.table_name = 'orders_staging'
+    AND il.issue_id = 'I017'
+    AND il.status = 'OPEN';
+
+-- Marcar na tabela issue_log o registro que virou órfão induzido na tabela payments_staging
+INSERT INTO issue_log (
+  issue_id,
+  table_name,
+  column_name,
+  record_id,
+  detected_value,
+  detection_rule,
+  severity,
+  status,
+  detected_at,
+  pipeline_stage,
+  analyst_note
+)
+SELECT
+  'I020',
+  'payments_staging',
+  'order_id',
+  p.order_id::TEXT,
+  p.order_id::TEXT,
+  'Pagamento associado a pedido sem itens (order removida)',
+  'MEDIUM',
+  'OPEN',
+  NOW(),
+  'DATA_CLEANING',
+  'Pagamento referente a pedido removido por ausência de itens.'
+FROM payments_staging p
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM orders_staging o
+  WHERE o.order_id = p.order_id
+)
+AND NOT EXISTS (
+  SELECT 1
+  FROM order_items_staging oi
+  WHERE oi.order_id = p.order_id
+)
+AND NOT EXISTS (
+  SELECT 1
+  FROM issue_log il
+  WHERE il.issue_id = 'I020'
+    AND il.table_name = 'payments_staging'
+    AND il.column_name = 'order_id'
+    AND il.record_id = p.order_id::TEXT
+);
+
+-- Remover order_id que não existe mais na tabela order_items_staging
+BEGIN;
+DELETE FROM order_items_staging oi
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM orders_staging o
+  WHERE o.order_id = oi.order_id
+)
+
+-- Remover order_id que não existe mais na tabela orders da tabela payments_staging
+BEGIN;
+DELETE FROM payments_staging p
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM orders_staging o
+  WHERE o.order_id = p.order_id
+);
+
+-- Atualizar para 'RESOLVED' casos da orphan_records que já foram resolvidos anteriormente
+UPDATE orphan_records o
+SET status = 'RESOLVED'
+FROM issue_log il
+WHERE o.child_record_id = il.record_id
+  AND o.child_table = il.table_name
+  AND il.status = 'RESOLVED'
+  AND o.status = 'OPEN';
+
+-- Remover da orphan_records órfãos induzidos que foram erroneamente inseridos na tabela
+DELETE FROM orphan_records o
+WHERE o.child_table IN ('order_items_staging', 'payments_staging')
+  AND NOT EXISTS (
+    SELECT 1
+    FROM issue_log il
+    WHERE il.record_id = o.child_record_id
+    AND il.table_name = o.child_table
+    AND il.issue_id = 'I011'
+    AND il.status = 'RESOLVED'
+  );
+
+-- Atualizar para 'RESOLVED' casos da issue_log que já foram resolvidos anteriormente
+UPDATE issue_log il
+SET status = 'RESOLVED',
+    resolved_at = NOW(),
+    analyst_note = CONCAT(analyst_note, ' - Registro removido da tabela orders')
+WHERE il.table_name IN ('order_items_staging', 'payments_staging')
+  AND il.column_name = 'order_id'
+  AND il.issue_id IN ('I011', 'I020')
+  AND il.status = 'OPEN';
 
