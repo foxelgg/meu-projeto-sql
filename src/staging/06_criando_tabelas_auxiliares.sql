@@ -84,6 +84,10 @@ VALUES
     ('I018', 'OUTLIER_FREIGHT_VALUE', 'Valor de frete estatisticamente muito acima do esperado', 'MEDIUM', 'Aplicar regra de negócio para validação'),
     ('I019', 'OUTLIER_PAYMENT_VALUE', 'Valor de pagamento estatisticamente muito acima do esperado', 'MEDIUM', 'Aplicar regra de negócio para validação');
 
+INSERT INTO issue_reference (issue_code, issue_type, issue_description, severity, default_action)
+VALUES
+    ('I020', 'PAYMENT_WITHOUT_ORDER_ITEMS', 'Pagamento sem itens no pedido', 'MEDIUM', 'Remover dado e registrar issue');
+
 UPDATE issue_reference
 SET issue_type = 'OUTLIER_PRICE_VALUE',
     issue_description = 'Valor de preço estatisticamente muito acima do esperado'
